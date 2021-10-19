@@ -3,26 +3,218 @@ title: "p8105_hw23_ms6358"
 output: github_document
 ---
 
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+## download the dataset
+
+```{r}
+library(p8105.datasets)
+library(tidyverse)
+library(readxl)
+data("instacart")
+data("brfss_smart2010")
 ```
 
-## R Markdown
+## count the aisles and select the aisles that are the most items ordered from
 
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+```{r}
+instacart %>%
+  count(aisle) 
 
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+instacart %>%
+  group_by(aisle) %>%
+  summarize(n_obs = n()) %>% ## n_obs stands for the numbers of aisle
+  arrange(desc(n_obs)) 
+```
+There are 134 aisle, the aisle the most items ordered from are 'fresh vegetables'.
 
-```{r cars}
-summary(cars)
+## Make a plot that shows the number of items ordered in each aisle
+
+```{r}
+sum_product =
+  instacart %>%
+  group_by(aisle) %>%
+  count(product_name, name = "product_count") 
+
+sum_aisle = 
+  aggregate(sum_product$product_count, by=list(aisle=sum_product$aisle), sum) %>% 
+  rename(total_items = x) %>%
+  filter(total_items > 10000) 
+  
+  names_aisles = c(pull(sum_aisle, aisle))
+  barplot(total_items~aisle, sum_aisle, width = 10, names.arg = names_aisles, xlab = "Aisle", ylab = "Numbers", main = "The Number of Items Ordered in Each Aisle")
+```
+## Make a table showing the three most popular items in each of the aisles “baking ingredients”, “dog food care”, and “packaged vegetables fruits”
+
+```{r}
+instacart %>%
+  filter(aisle %in% c("baking ingredients", "packaged vegetables fruits", "dog food care")) %>%
+  group_by(aisle, product_name) %>%
+  summarize(count = n())%>%
+  slice_max(product_name, n = 3) %>%
+  knitr::kable(digits = 1)
 ```
 
-## Including Plots
 
-You can also embed plots, for example:
+## Make a table showing the mean hour of the day at which Pink Lady Apples and Coffee Ice Cream are ordered on each day of the week
 
-```{r pressure, echo=FALSE}
-plot(pressure)
+```{r}
+sum_order_hour=
+  instacart %>%
+  filter (product_name %in% c("Pink Lady Apples", "Coffee Ice Cream")) %>%
+  select(order_hour_of_day, order_dow) %>%
+  group_by(order_dow) 
+
+mean_hour = 
+  aggregate(sum_order_hour$order_hour_of_day, by=list(order_dow=sum_order_hour$order_dow), mean) %>%
+   rename(mean_hour_eachday = x) %>%
+  pivot_wider(
+    names_from = "order_dow",
+    values_from = "mean_hour_eachday"
+  ) %>%
+  knitr::kable(digits = 2)
+mean_hour
 ```
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+The structure of dataset  is 'r nrow(instacart)` x `r ncol(instacart)` and has 1384617 obeservations. The key variables are `r names(instacart)` , for example, the variable 'aisle' is the specific passage from which customers pick items they want, like buy item 'cat food' from the ailse 'pet food', buy different yogurt from the ailse 'yogurt'.
+
+
+Problem 2
+
+##do some data cleaning
+
+```{r}
+brfss_df = 
+  brfss_smart2010 %>%
+  janitor::clean_names() %>%
+  filter(topic == "Overall Health", response %in% c("Poor", "Fair", "Good", "Very good", "Excellent")) %>%
+  separate(locationdesc, into = c("state", "location"), sep = ' - ') %>%
+  select(-locationabbr)
+    
+response = factor(brfss_df$response, levels("Poor, Fair, Good, Very good, Excellent") ,ordered = TRUE)
+```
+
+## Show states that were observed at 7 or more locations in 2002 and 2010
+
+```{r}
+brfss_df %>%
+  filter(year == "2002") %>%
+  group_by(state) %>%
+  distinct(location) %>%
+  summarize(count = n()) %>%
+  filter(count >= 7) %>%
+  arrange(count)
+```
+
+The result above showed that CT, FL, NC, MA, NJ, and PA were observed at 7 or more locations in 2002.
+
+## The variable 'count' denotes the number of locations observed in each state
+
+```{r}
+brfss_df %>%
+  filter(year == "2010") %>%
+  group_by(state) %>%
+  distinct(location) %>%
+  summarize(count = n()) %>%
+  filter(count >= 7) %>%
+  arrange(count)
+```
+
+The result above showed that CO, PA, SC, OH, MA, NY, NE, WA, CA, MD, NC, TX, NJ, and FL were observed at 7 or more locations in 2010.
+
+
+##Construct a dataset  
+
+```{r}
+brfss_excellect =
+  brfss_df %>%
+  filter(response == "Excellent") %>%
+  group_by(state, year) %>%
+  summarise(mean_data_value = mean(data_value)) 
+brfss_excellect
+```
+The chunck above constructs a dataset that is limited to Excellent responses, and contains,year, state, and a variable that averages the data_value across locations within a state.
+
+##Make a plot showing a line for each state across years 
+
+```{r}
+brfss_excellect %>%
+  ggplot(aes(x = year, y = mean_data_value, color = state)) + 
+  geom_line(alpha = .4,aes(group = state)) +
+  labs(x = "Year", y = " The Average Value across Locations", 
+       title = "The Average Value across Locations within a State") + 
+  geom_smooth(se = FALSE) +
+  theme(axis.text.x = element_text(size = 10), legend.position = "right")
+```
+
+The chunck above makes a plot showing a line for each state across years.
+
+##Make a two-panel plot
+
+```{r}
+brfss_df %>%
+  filter(state == "NY", year %in% c("2006","2010")) %>%
+  ggplot(aes(x = response, fill = data_value)) +
+  geom_density(alpha = .4) + theme(legend.position = "none") + 
+  labs(x = "Response", Y = "Data Value", title = "The Distribution of Data Value across Overall Health Responses in 2006 and 2010 in NY") +
+  facet_grid(~year) +
+  viridis::scale_fill_viridis(discrete = TRUE)
+```
+
+The chunck above makes a two-panel plot showing, for the years 2006, and 2010, distribution of data_value for responses (“Poor” to “Excellent”) among locations in NY State.
+
+Problem3
+
+## Load, tidy, and otherwise wrangle the data
+
+```{r}
+accelerometer_df = 
+  read_csv("./data/accel_data.csv") %>%
+  pivot_longer(
+    activity.1:activity.1440,
+     names_to = "activity_minute", 
+    names_prefix = "activity.",
+    values_to = "activity_count") %>%
+  janitor::clean_names() %>%
+  mutate(
+     weekday_or_weekend = case_when(
+        day %in% c("Monday","Tuesday", "Wednesday", "Thursday", "Friday") ~ "weekday",
+      day %in% c("Saturday", "Sunday") ~ "weekend",
+      TRUE      ~ ""
+     ))
+accelerometer_df           
+```
+The final dataset contains 50400 observations and 6 colums. The names of varaibales are 'r names(accelerometer_df)'.
+
+## create a table showing these totals
+
+```{r}
+accelerometer_df %>%
+  group_by(day_id) %>%
+  summarise(
+    total_count_day = sum(activity_count)
+  ) %>%
+  knitr::kable()
+```
+The chunk above show total activity for each day. However, the trend is not apparent.
+
+## Make a single-panel plot that shows the 24-hour activity time courses for each day
+
+```{r}
+accelerometer_df %>%
+  mutate(
+    hour = as.numeric(activity_minute)/60,
+    hour = floor(hour)
+  ) %>%
+  group_by(day_id, hour) %>%
+  summarise(
+    total_count_hour = sum(activity_count)
+  ) %>%
+  ggplot(aes(x = hour, y = total_count_hour, color = day_id)) +
+             geom_line() + 
+      labs(
+    title = "Distribution of Activity Counts Across Hours in a Day for Each Day of the study",
+    x = "Hours of the day",
+    y = "Activity count"
+  )
+```
+
+We can draw conclusion from the plot that the data is widely higher from 5 a.m to 10 p.m than the other time period which the individual might be asleep. The data reaches the peak and around 8 p.m.
