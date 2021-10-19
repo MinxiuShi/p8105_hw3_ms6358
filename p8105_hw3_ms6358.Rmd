@@ -101,7 +101,8 @@ brfss_df %>%
   distinct(location) %>%
   summarize(count = n()) %>%
   filter(count >= 7) %>%
-  arrange(count)
+  arrange(count) %>%
+  knitr::kable(digits = 1)
 ```
 
 The result above showed that CT, FL, NC, MA, NJ, and PA were observed at 7 or more locations in 2002.
@@ -115,7 +116,8 @@ brfss_df %>%
   distinct(location) %>%
   summarize(count = n()) %>%
   filter(count >= 7) %>%
-  arrange(count)
+  arrange(count) %>%
+  knitr::kable(digits = 1)
 ```
 
 The result above showed that CO, PA, SC, OH, MA, NY, NE, WA, CA, MD, NC, TX, NJ, and FL were observed at 7 or more locations in 2010.
